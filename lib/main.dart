@@ -3,12 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/export.dart';
+import 'package:asn1lib/asn1lib.dart';
 
 /// Appwrite Function Entry Point
 /// This function sends Firebase Cloud Messaging notifications
 Future<dynamic> main(final context) async {
   try {
-    context.log('🔔 Notification function started');
+    context.log('Notification function started');
     
     // Get environment variables
     final projectId = Platform.environment['FIREBASE_PROJECT_ID'] ?? '';
@@ -43,14 +44,11 @@ Future<dynamic> main(final context) async {
       });
     }
     
-    context.log('✅ Got Firebase access token');
+    context.log('Got Firebase access token');
     
     // Check if this is an event trigger or HTTP request
     final headers = context.req.headers;
     final body = context.req.body;
-    
-    context.log('Headers: ${jsonEncode(headers)}');
-    context.log('Body type: ${body.runtimeType}');
     
     // Parse the body
     Map<String, dynamic> payload;
@@ -70,13 +68,13 @@ Future<dynamic> main(final context) async {
     final appwriteEvent = headers['x-appwrite-event']?.toString() ?? '';
     
     if (appwriteEvent.isNotEmpty) {
-      context.log('📡 Appwrite Event: $appwriteEvent');
+      context.log('Appwrite Event: $appwriteEvent');
       return await _handleAppwriteEvent(context, appwriteEvent, payload, projectId, accessToken);
     }
     
     // Handle direct HTTP request
     final type = payload['type'] as String? ?? '';
-    context.log('📬 Notification type: $type');
+    context.log('Notification type: $type');
     
     switch (type) {
       case 'new_product':
@@ -85,42 +83,11 @@ Future<dynamic> main(final context) async {
           projectId: projectId,
           accessToken: accessToken,
           topic: 'new_products',
-          title: '🆕 منتج جديد!',
-          body: 'تم إضافة ${payload['productName'] ?? 'منتج'} إلى المتجر',
+          title: 'New Product!',
+          body: 'New product added: ${payload['productName'] ?? 'Product'}',
           data: {
             'type': 'new_product',
             'id': payload['productId']?.toString() ?? '',
-          },
-        );
-        
-      case 'order_status':
-        final fcmToken = payload['fcmToken'] as String?;
-        if (fcmToken == null || fcmToken.isEmpty) {
-          return context.res.json({
-            'success': false,
-            'error': 'fcmToken is required for order_status notification'
-          });
-        }
-        
-        final status = payload['status'] as String? ?? '';
-        final statusMessages = {
-          'confirmed': 'تم تأكيد طلبك ✅',
-          'preparing': 'جاري تحضير طلبك 📦',
-          'in_transit': 'طلبك في الطريق إليك 🚚',
-          'delivered': 'تم توصيل طلبك بنجاح ✨',
-        };
-        
-        return await _sendDeviceNotification(
-          context: context,
-          projectId: projectId,
-          accessToken: accessToken,
-          token: fcmToken,
-          title: 'تحديث الطلب',
-          body: statusMessages[status] ?? 'حالة الطلب: $status',
-          data: {
-            'type': 'order_status',
-            'id': payload['orderId']?.toString() ?? '',
-            'status': status,
           },
         );
         
@@ -130,8 +97,8 @@ Future<dynamic> main(final context) async {
           projectId: projectId,
           accessToken: accessToken,
           topic: 'admin_orders',
-          title: '🛒 طلب جديد!',
-          body: 'طلب جديد من ${payload['customerName'] ?? 'عميل'} - ${payload['totalAmount'] ?? 0} DA',
+          title: 'New Order!',
+          body: 'New order from ${payload['customerName'] ?? 'Customer'} - ${payload['totalAmount'] ?? 0} DA',
           data: {
             'type': 'new_order',
             'id': payload['orderId']?.toString() ?? '',
@@ -139,14 +106,13 @@ Future<dynamic> main(final context) async {
         );
         
       case 'test':
-        // Test notification
         return await _sendTopicNotification(
           context: context,
           projectId: projectId,
           accessToken: accessToken,
           topic: 'admin_orders',
-          title: '🧪 Test Notification',
-          body: 'This is a test notification from Appwrite Function',
+          title: 'Test Notification',
+          body: 'This is a test notification',
           data: {
             'type': 'test',
             'timestamp': DateTime.now().toIso8601String(),
@@ -179,18 +145,17 @@ Future<dynamic> _handleAppwriteEvent(
   String accessToken,
 ) async {
   context.log('Handling Appwrite event: $event');
-  context.log('Payload: ${jsonEncode(payload)}');
   
   // New product created
   if (event.contains('products') && event.contains('create')) {
-    context.log('🆕 New product event detected');
+    context.log('New product event detected');
     return await _sendTopicNotification(
       context: context,
       projectId: projectId,
       accessToken: accessToken,
       topic: 'new_products',
-      title: '🆕 منتج جديد!',
-      body: 'تم إضافة ${payload['name'] ?? 'منتج جديد'} إلى المتجر',
+      title: 'New Product!',
+      body: 'New product added: ${payload['name'] ?? 'New product'}',
       data: {
         'type': 'new_product',
         'id': payload['\$id']?.toString() ?? '',
@@ -200,14 +165,14 @@ Future<dynamic> _handleAppwriteEvent(
   
   // New order created
   if (event.contains('orders') && event.contains('create')) {
-    context.log('🛒 New order event detected');
+    context.log('New order event detected');
     return await _sendTopicNotification(
       context: context,
       projectId: projectId,
       accessToken: accessToken,
       topic: 'admin_orders',
-      title: '🛒 طلب جديد!',
-      body: 'طلب جديد من ${payload['customerName'] ?? 'عميل'} - ${payload['totalAmount'] ?? 0} DA',
+      title: 'New Order!',
+      body: 'New order from ${payload['customerName'] ?? 'Customer'} - ${payload['totalAmount'] ?? 0} DA',
       data: {
         'type': 'new_order',
         'id': payload['\$id']?.toString() ?? '',
@@ -252,7 +217,7 @@ Future<String?> _getAccessToken(Map<String, dynamic> serviceAccount, dynamic con
     
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      context.log('✅ Access token obtained successfully');
+      context.log('Access token obtained successfully');
       return data['access_token'] as String?;
     } else {
       context.error('Token error (${response.statusCode}): ${response.body}');
@@ -338,7 +303,7 @@ RSAPrivateKey _parsePrivateKeyFromPem(String pem) {
   final asn1Parser = ASN1Parser(Uint8List.fromList(bytes));
   final topLevelSeq = asn1Parser.nextObject() as ASN1Sequence;
   
-  // Check if it's PKCS#8 or PKCS#1 format
+  // Check if it is PKCS#8 or PKCS#1 format
   if (topLevelSeq.elements!.length == 3) {
     // PKCS#8 format
     final privateKeyOctet = topLevelSeq.elements![2] as ASN1OctetString;
@@ -361,62 +326,6 @@ RSAPrivateKey _extractRsaPrivateKey(ASN1Sequence seq) {
   return RSAPrivateKey(modulus, privateExponent, p, q);
 }
 
-/// Send notification to a specific device
-Future<dynamic> _sendDeviceNotification({
-  required dynamic context,
-  required String projectId,
-  required String accessToken,
-  required String token,
-  required String title,
-  required String body,
-  Map<String, String>? data,
-}) async {
-  context.log('📱 Sending notification to device: ${token.substring(0, 20)}...');
-  
-  final message = {
-    'message': {
-      'token': token,
-      'notification': {
-        'title': title,
-        'body': body,
-      },
-      'data': data ?? {},
-      'android': {
-        'priority': 'high',
-        'notification': {
-          'sound': 'default',
-          'channel_id': 'high_importance_channel',
-          'default_sound': true,
-          'default_vibrate_timings': true,
-        },
-      },
-    },
-  };
-  
-  final response = await http.post(
-    Uri.parse('https://fcm.googleapis.com/v1/projects/$projectId/messages:send'),
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $accessToken',
-    },
-    body: jsonEncode(message),
-  );
-  
-  context.log('FCM Response: ${response.statusCode} - ${response.body}');
-  
-  if (response.statusCode == 200) {
-    return context.res.json({
-      'success': true,
-      'message': 'Notification sent to device'
-    });
-  } else {
-    return context.res.json({
-      'success': false,
-      'error': 'FCM error: ${response.body}'
-    });
-  }
-}
-
 /// Send notification to a topic
 Future<dynamic> _sendTopicNotification({
   required dynamic context,
@@ -427,7 +336,7 @@ Future<dynamic> _sendTopicNotification({
   required String body,
   Map<String, String>? data,
 }) async {
-  context.log('📢 Sending notification to topic: $topic');
+  context.log('Sending notification to topic: $topic');
   
   final message = {
     'message': {
