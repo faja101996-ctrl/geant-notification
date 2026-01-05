@@ -1,5 +1,5 @@
 name: appwrite_function
-description: Appwrite Function for Firebase Cloud Messaging notifications
+description: Appwrite Function for FCM notifications
 version: 1.0.0
 
 environment:
@@ -7,8 +7,4 @@ environment:
 
 dependencies:
   http: ^1.1.0
-  pointycastle: ^3.7.3
-  asn1lib: ^1.5.0
-
-dev_dependencies:
-  lints: ^3.0.0
+  googleapis_auth: ^1.4.1
